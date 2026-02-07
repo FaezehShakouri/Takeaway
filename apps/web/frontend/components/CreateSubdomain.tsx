@@ -6,9 +6,12 @@ import { namehash } from "viem/ens";
 import { factoryAddress, takeawayFactoryAbi } from "@/lib/contracts";
 import { destinationChains } from "@/lib/chains";
 
-export function CreateSubdomain() {
+interface Props {
+  ensName: string;
+}
+
+export function CreateSubdomain({ ensName }: Props) {
   const { address } = useAccount();
-  const [parentName, setParentName] = useState("");
   const [destinationChainSlug, setDestinationChainSlug] = useState<string>(destinationChains[0].slug);
   const [destinationAddress, setDestinationAddress] = useState("");
 
@@ -22,12 +25,12 @@ export function CreateSubdomain() {
 
   const chain = destinationChains.find((c) => c.slug === destinationChainSlug);
   const subdomainLabel = chain?.slug ?? "sepolia";
-  const fullSubdomain = parentName ? `${subdomainLabel}.${parentName}` : "";
+  const fullSubdomain = `${subdomainLabel}.${ensName}`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const addr = factoryAddress;
-    if (!parentName.trim() || !destinationAddress.trim() || !addr) return;
+    if (!destinationAddress.trim() || !addr) return;
     const subdomainNamehash = namehash(fullSubdomain);
     writeContract({
       address: addr,
@@ -41,24 +44,11 @@ export function CreateSubdomain() {
   const canSubmit =
     address &&
     factoryAddress &&
-    parentName.trim() &&
     destinationAddress.trim() &&
     !isLoading;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div>
-        <label className="block text-sm font-medium text-[var(--foreground)] mb-1.5">
-          Your ENS name (parent)
-        </label>
-        <input
-          type="text"
-          placeholder="alice.eth"
-          value={parentName}
-          onChange={(e) => setParentName(e.target.value)}
-          className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--background)] px-4 py-3 text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/30 focus:border-[var(--accent)] transition-shadow"
-        />
-      </div>
       <div>
         <label className="block text-sm font-medium text-[var(--foreground)] mb-1.5">
           Destination chain
@@ -77,7 +67,7 @@ export function CreateSubdomain() {
       </div>
       <div>
         <label className="block text-sm font-medium text-[var(--foreground)] mb-1.5">
-          Destination address (on that chain)
+          Destination address (your address on that chain)
         </label>
         <input
           type="text"
@@ -87,17 +77,17 @@ export function CreateSubdomain() {
           className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--background)] px-4 py-3 font-mono text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/30 focus:border-[var(--accent)] transition-shadow"
         />
       </div>
-      {fullSubdomain && (
-        <p className="text-sm text-[var(--muted)]">
-          Subdomain: <span className="font-mono text-[var(--foreground)]">{fullSubdomain}</span>
-        </p>
-      )}
+      <div className="rounded-xl bg-[var(--background)] border border-[var(--card-border)] px-4 py-3">
+        <p className="text-xs font-medium text-[var(--muted)] mb-1">Subdomain preview</p>
+        <p className="font-mono text-[var(--foreground)]">{fullSubdomain}</p>
+      </div>
       {writeError && (
         <p className="text-sm text-red-600 dark:text-red-400">{writeError.message}</p>
       )}
       {isSuccess && (
         <p className="text-sm text-emerald-600 dark:text-emerald-400">
-          Deposit contract created. Set this subdomain and destination in ENS (e.g. app.ens.domains).
+          Deposit contract created for <span className="font-mono">{fullSubdomain}</span>. Set this
+          subdomain and destination in ENS (e.g. app.ens.domains).
         </p>
       )}
       <button
@@ -105,7 +95,7 @@ export function CreateSubdomain() {
         disabled={!canSubmit}
         className="w-full rounded-xl bg-[var(--accent)] text-white py-3 text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
       >
-        {isLoading ? "Creating…" : "Create subdomain"}
+        {isLoading ? "Creating…" : `Create ${fullSubdomain}`}
       </button>
     </form>
   );

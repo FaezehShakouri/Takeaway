@@ -15,7 +15,7 @@ export const takeawayFactoryAbi = [
     type: "constructor",
   },
   {
-    inputs: [],
+    inputs: [{ name: "subdomainNamehash", type: "bytes32" }],
     name: "createDepositContract",
     outputs: [{ name: "depositContract", type: "address" }],
     stateMutability: "nonpayable",

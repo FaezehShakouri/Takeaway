@@ -1,21 +1,30 @@
 "use client";
 
-import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useAccount, useConnect, useDisconnect, useEnsName, useEnsAvatar } from "wagmi";
+import { sepolia } from "viem/chains";
 
 export function ConnectWallet() {
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
+  const { data: ensName } = useEnsName({ address, chainId: sepolia.id });
+  const { data: ensAvatar } = useEnsAvatar({ name: ensName ?? undefined, chainId: sepolia.id });
 
-  // Single connect: use first available connector (injected / browser wallet)
   const connector = connectors[0];
 
   if (isConnected && address) {
-    const short = `${address.slice(0, 6)}…${address.slice(-4)}`;
+    const displayName = ensName ?? `${address.slice(0, 6)}…${address.slice(-4)}`;
     return (
       <div className="flex items-center gap-2">
-        <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-          {short}
+        {ensAvatar && (
+          <img
+            src={ensAvatar}
+            alt=""
+            className="h-6 w-6 rounded-full object-cover"
+          />
+        )}
+        <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+          {displayName}
         </span>
         <button
           type="button"
