@@ -1,7 +1,7 @@
 "use client";
 
 import { useAccount, useEnsName } from "wagmi";
-import { sepolia } from "viem/chains";
+import { mainnet } from "viem/chains";
 import { ConnectWallet } from "@/components/ConnectWallet";
 import { CreateSubdomain } from "@/components/CreateSubdomain";
 
@@ -9,7 +9,7 @@ export default function Home() {
   const { isConnected, address } = useAccount();
   const { data: ensName, isLoading: ensLoading } = useEnsName({
     address,
-    chainId: sepolia.id,
+    chainId: mainnet.id,
   });
 
   const hasEns = !!ensName;

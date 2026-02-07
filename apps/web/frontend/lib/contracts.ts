@@ -5,6 +5,13 @@ export const registryAddress = process.env.NEXT_PUBLIC_REGISTRY_ADDRESS
   ? (process.env.NEXT_PUBLIC_REGISTRY_ADDRESS as `0x${string}`)
   : undefined;
 
+/** ENS Registry – same address on mainnet & Sepolia */
+export const ensRegistryAddress =
+  "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e" as `0x${string}`;
+
+/* ------------------------------------------------------------------ */
+/*  Takeaway Factory ABI (includes DepositContractCreated event)      */
+/* ------------------------------------------------------------------ */
 export const takeawayFactoryAbi = [
   {
     inputs: [
@@ -22,6 +29,15 @@ export const takeawayFactoryAbi = [
     type: "function",
   },
   {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: "depositContract", type: "address" },
+      { indexed: false, name: "subdomainNamehash", type: "bytes32" },
+    ],
+    name: "DepositContractCreated",
+    type: "event",
+  },
+  {
     inputs: [],
     name: "registry",
     outputs: [{ name: "", type: "address" }],
@@ -33,6 +49,59 @@ export const takeawayFactoryAbi = [
     name: "relayer",
     outputs: [{ name: "", type: "address" }],
     stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
+/* ------------------------------------------------------------------ */
+/*  ENS Registry ABI (resolver lookup + subdomain creation)           */
+/* ------------------------------------------------------------------ */
+export const ensRegistryAbi = [
+  {
+    inputs: [{ name: "node", type: "bytes32" }],
+    name: "resolver",
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "node", type: "bytes32" },
+      { name: "label", type: "bytes32" },
+      { name: "owner", type: "address" },
+      { name: "resolver", type: "address" },
+      { name: "ttl", type: "uint64" },
+    ],
+    name: "setSubnodeRecord",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
+/* ------------------------------------------------------------------ */
+/*  ENS Public Resolver ABI (setAddr + setText)                       */
+/* ------------------------------------------------------------------ */
+export const ensResolverAbi = [
+  {
+    inputs: [
+      { name: "node", type: "bytes32" },
+      { name: "a", type: "address" },
+    ],
+    name: "setAddr",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "node", type: "bytes32" },
+      { name: "key", type: "string" },
+      { name: "value", type: "string" },
+    ],
+    name: "setText",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
   },
 ] as const;
