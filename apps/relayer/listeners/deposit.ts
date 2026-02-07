@@ -25,8 +25,8 @@ let lastIndexedBlock = 0n;
 /** Poll interval in ms. */
 const POLL_INTERVAL_MS = 5_000;
 
-/** Max range per getLogs call (some RPCs cap this). */
-const MAX_BLOCK_RANGE = 50_000n;
+/** Max range per getLogs call (Base public RPCs cap at ~1k blocks). */
+const MAX_BLOCK_RANGE = 1000n;
 
 function normalizeAddress(a: Address): string {
   return a.toLowerCase();
@@ -37,41 +37,67 @@ function normalizeAddress(a: Address): string {
 /* ------------------------------------------------------------------ */
 
 /**
- * Fetch all DepositContractCreated events from Factory (paginated in chunks of 50k blocks).
+ * Fetch all DepositContractCreated events from Factory (paginated).
  */
 export async function indexExistingDepositContracts(): Promise<void> {
+  console.log("[deposit] Fetching current block number…");
   const currentBlock = await publicClient.getBlockNumber();
-  let from = config.fromBlock;
+  const from = config.fromBlock;
+  console.log(
+    "[deposit] Scanning blocks %s → %s (range %s, chunk size %s)",
+    from.toString(),
+    currentBlock.toString(),
+    (currentBlock - from).toString(),
+    MAX_BLOCK_RANGE.toString()
+  );
 
-  while (from <= currentBlock) {
+  let cursor = from;
+  let chunkIdx = 0;
+
+  while (cursor <= currentBlock) {
     const to =
-      from + MAX_BLOCK_RANGE - 1n > currentBlock
+      cursor + MAX_BLOCK_RANGE - 1n > currentBlock
         ? currentBlock
-        : from + MAX_BLOCK_RANGE - 1n;
+        : cursor + MAX_BLOCK_RANGE - 1n;
 
-    const logs = await publicClient.getLogs({
-      address: config.factoryAddress,
-      event: parseAbiItem(
-        "event DepositContractCreated(address indexed depositContract, bytes32 subdomainNamehash)"
-      ),
-      fromBlock: from,
-      toBlock: to,
-    });
+    chunkIdx++;
+    try {
+      const logs = await publicClient.getLogs({
+        address: config.factoryAddress,
+        event: parseAbiItem(
+          "event DepositContractCreated(address indexed depositContract, bytes32 subdomainNamehash)"
+        ),
+        fromBlock: cursor,
+        toBlock: to,
+      });
 
-    for (const log of logs) {
-      const addr = (log.args as { depositContract?: Address })
-        .depositContract;
-      if (addr) depositContracts.add(normalizeAddress(addr));
+      for (const log of logs) {
+        const addr = (log.args as { depositContract?: Address })
+          .depositContract;
+        if (addr) {
+          depositContracts.add(normalizeAddress(addr));
+          console.log("[deposit]   found contract: %s (block %s)", addr, log.blockNumber?.toString());
+        }
+      }
+    } catch (err) {
+      console.error(
+        "[deposit] getLogs failed for chunk #%d (blocks %s–%s):",
+        chunkIdx,
+        cursor.toString(),
+        to.toString(),
+        err
+      );
+      throw err;
     }
-    from = to + 1n;
+    cursor = to + 1n;
   }
 
   lastIndexedBlock = currentBlock;
   console.log(
-    "[deposit] Indexed",
+    "[deposit] Indexed %d deposit contract(s) up to block %s (%d chunks)",
     depositContracts.size,
-    "deposit contract(s) up to block",
-    currentBlock.toString()
+    currentBlock.toString(),
+    chunkIdx
   );
 }
 

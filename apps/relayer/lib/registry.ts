@@ -1,10 +1,10 @@
 import { createPublicClient, http, type Address } from "viem";
-import { sepolia } from "viem/chains";
+import { base } from "viem/chains";
 import { config } from "../config";
 
-const chain = config.chainId === sepolia.id ? sepolia : { id: config.chainId } as const;
+const chain = config.chainId === base.id ? base : { id: config.chainId } as const;
 const transport = http(config.rpcUrl);
-/** Client for the chain where Takeaway contracts live (e.g. Sepolia). */
+/** Client for the chain where Takeaway contracts live (Base mainnet). */
 export const publicClient = createPublicClient({ chain, transport });
 
 const registryAbi = [

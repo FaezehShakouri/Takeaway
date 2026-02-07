@@ -1,9 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import {
+  useAccount,
+  usePublicClient,
+  useWriteContract,
+  useSwitchChain,
+} from "wagmi";
 import { namehash, labelhash } from "viem/ens";
-import { decodeEventLog, type Address } from "viem";
+import { decodeEventLog, createPublicClient, http, type Address } from "viem";
+import { mainnet, base } from "viem/chains";
 import {
   factoryAddress,
   takeawayFactoryAbi,
@@ -15,7 +21,9 @@ import { destinationChains } from "@/lib/chains";
 
 type Step =
   | "idle"
+  | "switchToBase"
   | "creating"
+  | "switchToMainnet"
   | "subdomain"
   | "setAddr"
   | "setText"
@@ -27,17 +35,35 @@ interface Props {
 
 const STEP_LABELS: Record<Step, string> = {
   idle: "",
-  creating: "Creating deposit contract…",
+  switchToBase: "Switching to Base…",
+  creating: "Creating deposit contract on Base…",
+  switchToMainnet: "Switching to Ethereum mainnet…",
   subdomain: "Creating ENS subdomain…",
   setAddr: "Setting address record…",
   setText: "Setting destination text records…",
   done: "Done!",
 };
 
+const mainnetRpc = process.env.NEXT_PUBLIC_MAINNET_RPC_URL;
+const baseRpc = process.env.NEXT_PUBLIC_BASE_RPC_URL;
+
+/** Read-only client pointed at Ethereum mainnet for ENS lookups */
+const mainnetClient = createPublicClient({
+  chain: mainnet,
+  transport: http(mainnetRpc),
+});
+
+/** Read-only client pointed at Base for tx receipt confirmations */
+const baseClient = createPublicClient({
+  chain: base,
+  transport: http(baseRpc),
+});
+
 export function CreateSubdomain({ ensName }: Props) {
-  const { address } = useAccount();
+  const { address, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const { switchChainAsync } = useSwitchChain();
 
   const [destinationChainSlug, setDestinationChainSlug] = useState<string>(
     destinationChains[0].slug
@@ -48,7 +74,7 @@ export function CreateSubdomain({ ensName }: Props) {
   const [depositAddr, setDepositAddr] = useState<Address | null>(null);
 
   const chain = destinationChains.find((c) => c.slug === destinationChainSlug);
-  const subdomainLabel = chain?.slug ?? "sepolia";
+  const subdomainLabel = chain?.slug ?? "base";
   const fullSubdomain = `${subdomainLabel}.${ensName}`;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,26 +83,37 @@ export function CreateSubdomain({ ensName }: Props) {
 
     setError(null);
     setDepositAddr(null);
-    setStep("creating");
 
     try {
       const subdomainNode = namehash(fullSubdomain);
       const parentNode = namehash(ensName);
       const label = labelhash(subdomainLabel);
 
-      /* ---- Step 1: Deploy deposit contract via Factory ---- */
+      /* ========================================================= */
+      /*  Phase 1 — Base: deploy deposit contract                  */
+      /* ========================================================= */
+
+      // Switch to Base if not already on it
+      if (chainId !== base.id) {
+        setStep("switchToBase");
+        await switchChainAsync({ chainId: base.id });
+      }
+
+      setStep("creating");
       const createHash = await writeContractAsync({
         address: factoryAddress,
         abi: takeawayFactoryAbi,
         functionName: "createDepositContract",
         args: [subdomainNode],
+        chainId: base.id,
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({
+      // Wait for Base tx confirmation
+      const receipt = await baseClient.waitForTransactionReceipt({
         hash: createHash,
       });
 
-      // Decode DepositContractCreated event to get the new contract address
+      // Decode DepositContractCreated event
       let createdAddress: Address | null = null;
       for (const log of receipt.logs) {
         try {
@@ -102,41 +139,63 @@ export function CreateSubdomain({ ensName }: Props) {
       }
       setDepositAddr(createdAddress);
 
-      /* ---- Step 2: Look up parent domain's resolver ---- */
-      const resolverAddr = await publicClient.readContract({
+      /* ========================================================= */
+      /*  Phase 2 — Ethereum mainnet: set ENS records              */
+      /* ========================================================= */
+
+      // Look up parent domain's resolver on mainnet (read-only, no chain switch needed)
+      const resolverAddr = await mainnetClient.readContract({
         address: ensRegistryAddress,
         abi: ensRegistryAbi,
         functionName: "resolver",
         args: [parentNode],
       });
 
-      if (
-        resolverAddr === "0x0000000000000000000000000000000000000000"
-      ) {
+      if (resolverAddr === "0x0000000000000000000000000000000000000000") {
         throw new Error("No resolver found for parent ENS name");
       }
 
-      /* ---- Step 3: Create subdomain in ENS Registry ---- */
-      setStep("subdomain");
-      const subHash = await writeContractAsync({
+      // Now switch wallet to Ethereum mainnet for the write transactions
+      setStep("switchToMainnet");
+      await switchChainAsync({ chainId: mainnet.id });
+
+      // Step 3: Create subdomain in ENS Registry (skip if it already exists)
+      const existingOwner = await mainnetClient.readContract({
         address: ensRegistryAddress,
         abi: ensRegistryAbi,
-        functionName: "setSubnodeRecord",
-        args: [parentNode, label, address, resolverAddr, BigInt(0)],
+        functionName: "owner",
+        args: [subdomainNode],
       });
-      await publicClient.waitForTransactionReceipt({ hash: subHash });
 
-      /* ---- Step 4: Set deposit contract as the subdomain address ---- */
+      const subnameExists =
+        existingOwner !== "0x0000000000000000000000000000000000000000";
+
+      if (subnameExists) {
+        console.log("[subdomain] %s already exists (owner: %s), skipping creation", fullSubdomain, existingOwner);
+      } else {
+        setStep("subdomain");
+        const subHash = await writeContractAsync({
+          address: ensRegistryAddress,
+          abi: ensRegistryAbi,
+          functionName: "setSubnodeRecord",
+          args: [parentNode, label, address, resolverAddr, BigInt(0)],
+          chainId: mainnet.id,
+        });
+        await mainnetClient.waitForTransactionReceipt({ hash: subHash });
+      }
+
+      // Step 4: Set deposit contract as the subdomain address
       setStep("setAddr");
       const addrHash = await writeContractAsync({
         address: resolverAddr,
         abi: ensResolverAbi,
         functionName: "setAddr",
         args: [subdomainNode, createdAddress],
+        chainId: mainnet.id,
       });
-      await publicClient.waitForTransactionReceipt({ hash: addrHash });
+      await mainnetClient.waitForTransactionReceipt({ hash: addrHash });
 
-      /* ---- Step 5: Set destination text records ---- */
+      // Step 5: Set destination text records
       setStep("setText");
       const chainIdHash = await writeContractAsync({
         address: resolverAddr,
@@ -147,8 +206,9 @@ export function CreateSubdomain({ ensName }: Props) {
           "io.takeaway.destinationChainId",
           chain!.id.toString(),
         ],
+        chainId: mainnet.id,
       });
-      await publicClient.waitForTransactionReceipt({ hash: chainIdHash });
+      await mainnetClient.waitForTransactionReceipt({ hash: chainIdHash });
 
       const destHash = await writeContractAsync({
         address: resolverAddr,
@@ -159,8 +219,9 @@ export function CreateSubdomain({ ensName }: Props) {
           "io.takeaway.destinationAddress",
           destinationAddress,
         ],
+        chainId: mainnet.id,
       });
-      await publicClient.waitForTransactionReceipt({ hash: destHash });
+      await mainnetClient.waitForTransactionReceipt({ hash: destHash });
 
       setStep("done");
     } catch (err: unknown) {
@@ -240,7 +301,7 @@ export function CreateSubdomain({ ensName }: Props) {
           <p className="text-sm text-emerald-600 dark:text-emerald-400">
             Deposit contract{" "}
             <span className="font-mono break-all">{depositAddr}</span> created
-            and configured on{" "}
+            on Base and configured on{" "}
             <span className="font-mono">{fullSubdomain}</span>.
           </p>
         </div>

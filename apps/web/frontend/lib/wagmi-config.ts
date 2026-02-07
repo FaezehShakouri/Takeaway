@@ -2,14 +2,17 @@
 
 import { http, createConfig } from "wagmi";
 import { injected } from "wagmi/connectors";
-import { mainnet, sepolia } from "viem/chains";
+import { mainnet, base } from "viem/chains";
+
+const baseRpc = process.env.NEXT_PUBLIC_BASE_RPC_URL;
+const mainnetRpc = process.env.NEXT_PUBLIC_MAINNET_RPC_URL;
 
 export const config = createConfig({
-  chains: [sepolia, mainnet],
+  chains: [base, mainnet],
   connectors: [injected()],
   transports: {
-    [sepolia.id]: http(),
-    [mainnet.id]: http(),
+    [base.id]: http(baseRpc),
+    [mainnet.id]: http(mainnetRpc),
   },
 });
 

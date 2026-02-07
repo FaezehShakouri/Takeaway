@@ -2,9 +2,9 @@ import { type Address, type Hash, createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 import { config } from "../config";
 
-const ensTransport = http(config.ensRpcUrl || config.rpcUrl);
-const ensChain = config.ensRpcUrl ? mainnet : ({ id: config.chainId } as const);
-const ensClient = createPublicClient({ chain: ensChain, transport: ensTransport });
+/** ENS always lives on Ethereum mainnet – use the dedicated ENS RPC */
+const ensTransport = http(config.ensRpcUrl);
+const ensClient = createPublicClient({ chain: mainnet, transport: ensTransport });
 
 const ensRegistryAbi = [
   {

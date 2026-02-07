@@ -59,6 +59,13 @@ export const takeawayFactoryAbi = [
 export const ensRegistryAbi = [
   {
     inputs: [{ name: "node", type: "bytes32" }],
+    name: "owner",
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "node", type: "bytes32" }],
     name: "resolver",
     outputs: [{ name: "", type: "address" }],
     stateMutability: "view",
