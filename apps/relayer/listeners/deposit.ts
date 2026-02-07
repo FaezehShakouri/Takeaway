@@ -1,4 +1,4 @@
-import { type Address, type Hash, parseAbiItem } from "viem";
+import { type Address, parseAbiItem } from "viem";
 import { publicClient } from "../lib/registry";
 import { walletClient, relayerAddress } from "../lib/wallet";
 import { getSubdomainNamehash } from "../lib/registry";
@@ -19,11 +19,22 @@ const takeawayDepositAbi = [
 /** Known deposit contract addresses (from Factory.DepositContractCreated). */
 const depositContracts = new Set<string>();
 
+/** Last block we've processed – poll picks up from here. */
+let lastIndexedBlock = 0n;
+
+/** Poll interval in ms. */
+const POLL_INTERVAL_MS = 5_000;
+
+/** Max range per getLogs call (some RPCs cap this). */
+const MAX_BLOCK_RANGE = 50_000n;
+
 function normalizeAddress(a: Address): string {
   return a.toLowerCase();
 }
 
-const MAX_BLOCK_RANGE = 50_000n;
+/* ------------------------------------------------------------------ */
+/*  One-time historical index (runs on startup)                        */
+/* ------------------------------------------------------------------ */
 
 /**
  * Fetch all DepositContractCreated events from Factory (paginated in chunks of 50k blocks).
@@ -33,82 +44,161 @@ export async function indexExistingDepositContracts(): Promise<void> {
   let from = config.fromBlock;
 
   while (from <= currentBlock) {
-    const to = from + MAX_BLOCK_RANGE - 1n > currentBlock ? currentBlock : from + MAX_BLOCK_RANGE - 1n;
+    const to =
+      from + MAX_BLOCK_RANGE - 1n > currentBlock
+        ? currentBlock
+        : from + MAX_BLOCK_RANGE - 1n;
+
     const logs = await publicClient.getLogs({
       address: config.factoryAddress,
-      event: parseAbiItem("event DepositContractCreated(address indexed depositContract, bytes32 subdomainNamehash)"),
+      event: parseAbiItem(
+        "event DepositContractCreated(address indexed depositContract, bytes32 subdomainNamehash)"
+      ),
       fromBlock: from,
       toBlock: to,
     });
+
     for (const log of logs) {
-      const addr = (log.args as { depositContract?: Address }).depositContract;
+      const addr = (log.args as { depositContract?: Address })
+        .depositContract;
       if (addr) depositContracts.add(normalizeAddress(addr));
     }
     from = to + 1n;
   }
-  console.log("[deposit] Indexed", depositContracts.size, "deposit contract(s)");
+
+  lastIndexedBlock = currentBlock;
+  console.log(
+    "[deposit] Indexed",
+    depositContracts.size,
+    "deposit contract(s) up to block",
+    currentBlock.toString()
+  );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Continuous polling loop (replaces watchContractEvent)               */
+/* ------------------------------------------------------------------ */
+
 /**
- * Subscribe to new DepositContractCreated and add to our set, then start watching that contract for Deposit.
+ * Start a polling loop that checks for new DepositContractCreated and
+ * Deposit events every POLL_INTERVAL_MS.  Much more reliable than
+ * watchContractEvent on public HTTP RPCs.
  */
-export function watchNewDepositContracts(onDeposit: (contract: Address, from: Address, amount: bigint) => void): void {
-  publicClient.watchContractEvent({
-    address: config.factoryAddress,
-    event: parseAbiItem("event DepositContractCreated(address indexed depositContract, bytes32 subdomainNamehash)"),
-    onLogs(logs) {
-      for (const log of logs) {
-        const addr = (log.args as { depositContract?: Address }).depositContract;
+export function startPolling(
+  onDeposit: (contract: Address, from: Address, amount: bigint) => void
+): void {
+  async function poll() {
+    try {
+      const currentBlock = await publicClient.getBlockNumber();
+      if (currentBlock <= lastIndexedBlock) return;
+
+      const from = lastIndexedBlock + 1n;
+      const to = currentBlock;
+
+      /* ---- 1. New deposit contracts created by the factory ---- */
+      const factoryLogs = await publicClient.getLogs({
+        address: config.factoryAddress,
+        event: parseAbiItem(
+          "event DepositContractCreated(address indexed depositContract, bytes32 subdomainNamehash)"
+        ),
+        fromBlock: from,
+        toBlock: to,
+      });
+
+      for (const log of factoryLogs) {
+        const addr = (log.args as { depositContract?: Address })
+          .depositContract;
         if (addr) {
-          depositContracts.add(normalizeAddress(addr));
-          console.log("[deposit] New contract:", addr);
-          watchDeposits(addr as Address, onDeposit);
+          const norm = normalizeAddress(addr);
+          if (!depositContracts.has(norm)) {
+            depositContracts.add(norm);
+            console.log("[deposit] New contract detected:", addr);
+          }
         }
       }
-    },
-  });
-}
 
-/**
- * Watch one deposit contract for Deposit events.
- */
-function watchDeposits(depositContract: Address, onDeposit: (contract: Address, from: Address, amount: bigint) => void): void {
-  publicClient.watchContractEvent({
-    address: depositContract,
-    event: parseAbiItem("event Deposit(address indexed from, uint256 amount)"),
-    onLogs(logs) {
-      for (const log of logs) {
-        const args = log.args as { from?: Address; amount?: bigint };
-        if (args.from != null && args.amount != null) {
-          void onDeposit(depositContract, args.from, args.amount);
+      /* ---- 2. Deposit events on all known deposit contracts ---- */
+      if (depositContracts.size > 0) {
+        const addresses = [...depositContracts] as Address[];
+
+        const depositLogs = await publicClient.getLogs({
+          address: addresses,
+          event: parseAbiItem(
+            "event Deposit(address indexed from, uint256 amount)"
+          ),
+          fromBlock: from,
+          toBlock: to,
+        });
+
+        for (const log of depositLogs) {
+          const args = log.args as { from?: Address; amount?: bigint };
+          if (args.from != null && args.amount != null && log.address) {
+            console.log(
+              "[deposit] Deposit detected:",
+              args.amount.toString(),
+              "wei from",
+              args.from,
+              "to contract",
+              log.address
+            );
+            void onDeposit(log.address as Address, args.from, args.amount);
+          }
         }
       }
-    },
-  });
-}
 
-/**
- * Start watching all known deposit contracts for Deposit events.
- */
-export function watchAllDeposits(onDeposit: (contract: Address, from: Address, amount: bigint) => void): void {
-  for (const addr of depositContracts) {
-    watchDeposits(addr as Address, onDeposit);
+      lastIndexedBlock = to;
+    } catch (err) {
+      console.error("[deposit] Poll error:", err);
+    }
   }
+
+  // Run the first poll immediately, then on interval
+  void poll();
+  setInterval(poll, POLL_INTERVAL_MS);
+  console.log(
+    "[deposit] Polling every",
+    POLL_INTERVAL_MS / 1000,
+    "seconds for new events"
+  );
 }
+
+/* ------------------------------------------------------------------ */
+/*  Process a deposit: withdraw → look up ENS destination → bridge     */
+/* ------------------------------------------------------------------ */
 
 /**
  * Withdraw contract balance to relayer, then bridge to destination via LI.FI.
  */
-export async function processDeposit(depositContract: Address, _from: Address, amount: bigint): Promise<void> {
+export async function processDeposit(
+  depositContract: Address,
+  _from: Address,
+  amount: bigint
+): Promise<void> {
   try {
-    console.log("[deposit] Processing", amount.toString(), "from", depositContract);
+    console.log(
+      "[deposit] Processing",
+      amount.toString(),
+      "wei from contract",
+      depositContract
+    );
 
     const namehash = await getSubdomainNamehash(depositContract);
     const destination = await getDestinationFromEns(namehash);
     if (!destination) {
-      console.warn("[deposit] No ENS destination for contract", depositContract, "- skipping bridge");
+      console.warn(
+        "[deposit] No ENS destination for contract",
+        depositContract,
+        "- skipping bridge"
+      );
       return;
     }
+
+    console.log(
+      "[deposit] Destination: chain",
+      destination.chainId,
+      "address",
+      destination.address
+    );
 
     if (!walletClient) {
       console.error("[deposit] No wallet client - cannot withdraw");

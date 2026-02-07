@@ -1,8 +1,9 @@
 import type { Chain } from "viem";
-import { createWalletClient, http } from "viem";
+import { createWalletClient, http, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia, arbitrumSepolia, baseSepolia, optimismSepolia } from "viem/chains";
 import { config } from "../config";
+import { publicClient } from "../lib/registry";
 
 const account = privateKeyToAccount(config.relayerPrivateKey);
 const chains: Chain[] = [sepolia, arbitrumSepolia, baseSepolia, optimismSepolia];
@@ -10,7 +11,12 @@ const chains: Chain[] = [sepolia, arbitrumSepolia, baseSepolia, optimismSepolia]
 function getChain(chainId: number): Chain {
   const c = chains.find((ch) => ch.id === chainId);
   if (c) return c;
-  return { id: chainId, name: `Chain ${chainId}`, nativeCurrency: { decimals: 18, name: "Ether", symbol: "ETH" }, rpcUrls: { default: { http: [config.rpcUrl] } } } as Chain;
+  return {
+    id: chainId,
+    name: `Chain ${chainId}`,
+    nativeCurrency: { decimals: 18, name: "Ether", symbol: "ETH" },
+    rpcUrls: { default: { http: [config.rpcUrl] } },
+  } as Chain;
 }
 
 const walletClients = new Map<number, ReturnType<typeof createWalletClient>>();
@@ -45,14 +51,64 @@ export async function configureLifi(): Promise<void> {
 
 const NATIVE_TOKEN = "0x0000000000000000000000000000000000000000" as const;
 
+/* ------------------------------------------------------------------ */
+/*  Testnet chain IDs (LI.FI doesn't support these)                   */
+/* ------------------------------------------------------------------ */
+const TESTNET_CHAIN_IDS = new Set([
+  11155111, // Sepolia
+  421614,   // Arbitrum Sepolia
+  84532,    // Base Sepolia
+  11155420, // Optimism Sepolia
+  5,        // Goerli (deprecated but just in case)
+  80001,    // Mumbai
+]);
+
+function isTestnet(chainId: number): boolean {
+  return TESTNET_CHAIN_IDS.has(chainId);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Testnet fallback: direct ETH transfer on the source chain          */
+/* ------------------------------------------------------------------ */
+async function directTransfer(amount: bigint, toAddress: string): Promise<void> {
+  console.log("[bridge] Testnet detected – using direct transfer fallback");
+  console.log("[bridge] Sending", amount.toString(), "wei to", toAddress, "on chain", config.chainId);
+
+  const wallet = getWalletClient(config.chainId);
+  const hash = await wallet.sendTransaction({
+    to: toAddress as Address,
+    value: amount,
+    chain: getChain(config.chainId),
+  });
+
+  console.log("[bridge] Direct transfer tx:", hash);
+  await publicClient.waitForTransactionReceipt({ hash });
+  console.log("[bridge] Direct transfer confirmed");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main bridge entry point                                            */
+/* ------------------------------------------------------------------ */
+
 /**
- * Bridge `amount` wei from current chain to `toChainId` and send to `toAddress` using LI.FI.
+ * Bridge `amount` wei from current chain to `toChainId` / `toAddress`.
+ *
+ * - On **mainnet** chains: uses LI.FI to find and execute a cross-chain route.
+ * - On **testnets** (Sepolia, etc.): falls back to a direct ETH transfer on
+ *   the source chain since LI.FI does not support testnets.
  */
 export async function executeBridge(
   amount: bigint,
   toChainId: number,
   toAddress: string
 ): Promise<void> {
+  // Testnet shortcut – LI.FI has no testnet support
+  if (isTestnet(config.chainId) || isTestnet(toChainId)) {
+    await directTransfer(amount, toAddress);
+    return;
+  }
+
+  // Mainnet path – use LI.FI
   await configureLifi();
   const { getRoutes, executeRoute } = await import("@lifi/sdk");
 

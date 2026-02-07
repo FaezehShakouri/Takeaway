@@ -9,8 +9,7 @@
 import { config } from "./config";
 import {
   indexExistingDepositContracts,
-  watchNewDepositContracts,
-  watchAllDeposits,
+  startPolling,
   processDeposit,
 } from "./listeners/deposit";
 import { configureLifi } from "./bridge/lifi";
@@ -22,9 +21,11 @@ async function main() {
 
   await configureLifi();
 
+  // Index all existing deposit contracts from historical logs
   await indexExistingDepositContracts();
-  watchAllDeposits(processDeposit);
-  watchNewDepositContracts(processDeposit);
+
+  // Start continuous polling for new contracts + deposits
+  startPolling(processDeposit);
 
   console.log("[relayer] Watching for deposits…");
 }
