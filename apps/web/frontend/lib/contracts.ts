@@ -1,9 +1,10 @@
-export const factoryAddress = process.env.NEXT_PUBLIC_FACTORY_ADDRESS
-  ? (process.env.NEXT_PUBLIC_FACTORY_ADDRESS as `0x${string}`)
-  : undefined;
-export const registryAddress = process.env.NEXT_PUBLIC_REGISTRY_ADDRESS
-  ? (process.env.NEXT_PUBLIC_REGISTRY_ADDRESS as `0x${string}`)
-  : undefined;
+const DEFAULT_FACTORY = "0x72f9BF0733F39E97466a8BF4E1Dee13cBA6a497d" as `0x${string}`;
+const DEFAULT_REGISTRY = "0xdfB82Aa127c2442960444aB0E1a0e4c923e92A5D" as `0x${string}`;
+
+export const factoryAddress = (process.env.NEXT_PUBLIC_FACTORY_ADDRESS ??
+  DEFAULT_FACTORY) as `0x${string}`;
+export const registryAddress = (process.env.NEXT_PUBLIC_REGISTRY_ADDRESS ??
+  DEFAULT_REGISTRY) as `0x${string}`;
 
 /** ENS Registry – same address on mainnet & Sepolia */
 export const ensRegistryAddress =

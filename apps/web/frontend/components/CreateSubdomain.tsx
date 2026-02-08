@@ -54,8 +54,11 @@ const STEP_ORDER: Step[] = [
   "done",
 ];
 
-const mainnetRpc = process.env.NEXT_PUBLIC_MAINNET_RPC_URL;
-const baseRpc = process.env.NEXT_PUBLIC_BASE_RPC_URL;
+const DEFAULT_MAINNET_RPC = "https://ethereum-rpc.publicnode.com";
+const DEFAULT_BASE_RPC = "https://base.public.blockpi.network/v1/rpc/public";
+
+const mainnetRpc = process.env.NEXT_PUBLIC_MAINNET_RPC_URL ?? DEFAULT_MAINNET_RPC;
+const baseRpc = process.env.NEXT_PUBLIC_BASE_RPC_URL ?? DEFAULT_BASE_RPC;
 
 /** Read-only client pointed at Ethereum mainnet for ENS lookups */
 const mainnetClient = createPublicClient({
@@ -83,13 +86,12 @@ async function queryExistingSubnames(ensName: string) {
         });
         return {
           ...chain,
-          exists:
-            owner !== "0x0000000000000000000000000000000000000000",
+          exists: owner !== "0x0000000000000000000000000000000000000000",
         };
       } catch {
         return { ...chain, exists: false };
       }
-    })
+    }),
   );
   return results;
 }
@@ -101,7 +103,7 @@ export function CreateSubdomain({ ensName }: Props) {
   const { switchChainAsync } = useSwitchChain();
 
   const [destinationChainSlug, setDestinationChainSlug] = useState<string>(
-    destinationChains[0].slug
+    destinationChains[0].slug,
   );
   const [destinationAddress, setDestinationAddress] = useState("");
   const [step, setStep] = useState<Step>("idle");
@@ -187,7 +189,7 @@ export function CreateSubdomain({ ensName }: Props) {
 
       if (!createdAddress) {
         throw new Error(
-          "Could not find deposit contract address in transaction logs"
+          "Could not find deposit contract address in transaction logs",
         );
       }
       setDepositAddr(createdAddress);
@@ -224,7 +226,7 @@ export function CreateSubdomain({ ensName }: Props) {
         console.log(
           "[subname] %s already exists (owner: %s), skipping creation",
           fullSubname,
-          existingOwner
+          existingOwner,
         );
       } else {
         setStep("subdomain");
@@ -362,7 +364,7 @@ export function CreateSubdomain({ ensName }: Props) {
             {destinationChains.map((c) => {
               const isSelected = c.slug === destinationChainSlug;
               const isConfigured = existingSubnames.find(
-                (e) => e.slug === c.slug
+                (e) => e.slug === c.slug,
               )?.exists;
               return (
                 <button
