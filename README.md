@@ -1,6 +1,6 @@
 # Takeaway
 
-**Configure your ENS once. Receive crypto from any chain, on the chain you want — automatically.**
+**Configure your ENS subname once ({chain}.yourname.eth). Receive crypto from any chain, on the chain you want — automatically.**
 
 Takeaway lets you create chain-specific ENS subnames (e.g. `arbitrum.alice.eth`, `base.alice.eth`). You send funds to the subname from any chain; a relayer detects the deposit, reads your destination from ENS, withdraws to itself, and bridges to your chosen chain and address via [Li.Fi](https://li.fi). No bridge UI, no extra signing after the one-time setup.
 
