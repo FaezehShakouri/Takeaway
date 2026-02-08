@@ -36,13 +36,23 @@ interface Props {
 const STEP_LABELS: Record<Step, string> = {
   idle: "",
   switchToBase: "Switching to Base…",
-  creating: "Creating deposit contract on Base…",
+  creating: "Deploying deposit contract on Base…",
   switchToMainnet: "Switching to Ethereum mainnet…",
   subdomain: "Creating ENS subdomain…",
   setAddr: "Setting address record…",
-  setText: "Setting destination text records…",
-  done: "Done!",
+  setText: "Setting destination records…",
+  done: "All set!",
 };
+
+const STEP_ORDER: Step[] = [
+  "switchToBase",
+  "creating",
+  "switchToMainnet",
+  "subdomain",
+  "setAddr",
+  "setText",
+  "done",
+];
 
 const mainnetRpc = process.env.NEXT_PUBLIC_MAINNET_RPC_URL;
 const baseRpc = process.env.NEXT_PUBLIC_BASE_RPC_URL;
@@ -79,7 +89,13 @@ export function CreateSubdomain({ ensName }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!factoryAddress || !address || !publicClient || !destinationAddress.trim()) return;
+    if (
+      !factoryAddress ||
+      !address ||
+      !publicClient ||
+      !destinationAddress.trim()
+    )
+      return;
 
     setError(null);
     setDepositAddr(null);
@@ -93,7 +109,6 @@ export function CreateSubdomain({ ensName }: Props) {
       /*  Phase 1 — Base: deploy deposit contract                  */
       /* ========================================================= */
 
-      // Switch to Base if not already on it
       if (chainId !== base.id) {
         setStep("switchToBase");
         await switchChainAsync({ chainId: base.id });
@@ -108,12 +123,10 @@ export function CreateSubdomain({ ensName }: Props) {
         chainId: base.id,
       });
 
-      // Wait for Base tx confirmation
       const receipt = await baseClient.waitForTransactionReceipt({
         hash: createHash,
       });
 
-      // Decode DepositContractCreated event
       let createdAddress: Address | null = null;
       for (const log of receipt.logs) {
         try {
@@ -143,7 +156,6 @@ export function CreateSubdomain({ ensName }: Props) {
       /*  Phase 2 — Ethereum mainnet: set ENS records              */
       /* ========================================================= */
 
-      // Look up parent domain's resolver on mainnet (read-only, no chain switch needed)
       const resolverAddr = await mainnetClient.readContract({
         address: ensRegistryAddress,
         abi: ensRegistryAbi,
@@ -155,11 +167,9 @@ export function CreateSubdomain({ ensName }: Props) {
         throw new Error("No resolver found for parent ENS name");
       }
 
-      // Now switch wallet to Ethereum mainnet for the write transactions
       setStep("switchToMainnet");
       await switchChainAsync({ chainId: mainnet.id });
 
-      // Step 3: Create subdomain in ENS Registry (skip if it already exists)
       const existingOwner = await mainnetClient.readContract({
         address: ensRegistryAddress,
         abi: ensRegistryAbi,
@@ -171,7 +181,11 @@ export function CreateSubdomain({ ensName }: Props) {
         existingOwner !== "0x0000000000000000000000000000000000000000";
 
       if (subnameExists) {
-        console.log("[subdomain] %s already exists (owner: %s), skipping creation", fullSubdomain, existingOwner);
+        console.log(
+          "[subdomain] %s already exists (owner: %s), skipping creation",
+          fullSubdomain,
+          existingOwner
+        );
       } else {
         setStep("subdomain");
         const subHash = await writeContractAsync({
@@ -184,7 +198,6 @@ export function CreateSubdomain({ ensName }: Props) {
         await mainnetClient.waitForTransactionReceipt({ hash: subHash });
       }
 
-      // Step 4: Set deposit contract as the subdomain address
       setStep("setAddr");
       const addrHash = await writeContractAsync({
         address: resolverAddr,
@@ -195,7 +208,6 @@ export function CreateSubdomain({ ensName }: Props) {
       });
       await mainnetClient.waitForTransactionReceipt({ hash: addrHash });
 
-      // Step 5: Set destination text records
       setStep("setText");
       const chainIdHash = await writeContractAsync({
         address: resolverAddr,
@@ -242,75 +254,121 @@ export function CreateSubdomain({ ensName }: Props) {
     !isLoading &&
     step !== "done";
 
+  // Progress calculation
+  const currentStepIndex = STEP_ORDER.indexOf(step);
+  const progressPercent =
+    step === "idle"
+      ? 0
+      : step === "done"
+        ? 100
+        : ((currentStepIndex + 1) / STEP_ORDER.length) * 100;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Destination chain */}
       <div>
-        <label className="block text-sm font-medium text-[var(--foreground)] mb-1.5">
+        <label className="block text-sm font-medium text-zinc-300 mb-2">
           Destination chain
         </label>
         <select
           value={destinationChainSlug}
           onChange={(e) => setDestinationChainSlug(e.target.value)}
-          className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--background)] px-4 py-3 text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/30 focus:border-[var(--accent)] transition-shadow"
+          className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500/50 transition-all appearance-none cursor-pointer"
         >
           {destinationChains.map((c) => (
-            <option key={c.id} value={c.slug}>
+            <option key={c.id} value={c.slug} className="bg-[#0c0c0c]">
               {c.name}
             </option>
           ))}
         </select>
       </div>
+
+      {/* Destination address */}
       <div>
-        <label className="block text-sm font-medium text-[var(--foreground)] mb-1.5">
-          Destination address (your address on that chain)
+        <label className="block text-sm font-medium text-zinc-300 mb-2">
+          Receiving address on that chain
         </label>
         <input
           type="text"
           placeholder="0x..."
           value={destinationAddress}
           onChange={(e) => setDestinationAddress(e.target.value)}
-          className="w-full rounded-xl border border-[var(--card-border)] bg-[var(--background)] px-4 py-3 font-mono text-sm text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/30 focus:border-[var(--accent)] transition-shadow"
+          className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 font-mono text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500/50 transition-all"
         />
       </div>
-      <div className="rounded-xl bg-[var(--background)] border border-[var(--card-border)] px-4 py-3">
-        <p className="text-xs font-medium text-[var(--muted)] mb-1">
+
+      {/* Subdomain preview */}
+      <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] px-4 py-3">
+        <p className="text-xs font-medium text-zinc-500 mb-1">
           Subdomain preview
         </p>
-        <p className="font-mono text-[var(--foreground)]">{fullSubdomain}</p>
+        <p className="font-mono text-zinc-100">
+          <span className="gradient-text">{subdomainLabel}</span>
+          <span className="text-zinc-500">.{ensName}</span>
+        </p>
       </div>
 
       {/* Progress indicator */}
       {isLoading && (
-        <div className="rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-4 py-3">
-          <p className="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
-            <span className="inline-block h-3 w-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+        <div className="space-y-3">
+          {/* Progress bar */}
+          <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 transition-all duration-700 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <div className="flex items-center gap-2.5 text-sm text-teal-400">
+            <span className="inline-block h-4 w-4 rounded-full border-2 border-teal-500 border-t-transparent animate-spin shrink-0" />
             {STEP_LABELS[step]}
-          </p>
+          </div>
         </div>
       )}
 
+      {/* Error */}
       {error && (
-        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3">
+          <p className="text-sm text-red-400">{error}</p>
+        </div>
       )}
 
+      {/* Success */}
       {step === "done" && depositAddr && (
-        <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-4 py-3 space-y-1">
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
-            All set!
-          </p>
-          <p className="text-sm text-emerald-600 dark:text-emerald-400">
+        <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-emerald-400"
+            >
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            <p className="text-sm font-semibold text-emerald-400">All set!</p>
+          </div>
+          <p className="text-sm text-emerald-400/80">
             Deposit contract{" "}
-            <span className="font-mono break-all">{depositAddr}</span> created
-            on Base and configured on{" "}
-            <span className="font-mono">{fullSubdomain}</span>.
+            <span className="font-mono break-all text-emerald-300">
+              {depositAddr}
+            </span>{" "}
+            deployed and{" "}
+            <span className="font-mono text-emerald-300">{fullSubdomain}</span>{" "}
+            configured.
           </p>
         </div>
       )}
 
+      {/* Submit */}
       <button
         type="submit"
         disabled={!canSubmit}
-        className="w-full rounded-xl bg-[var(--accent)] text-white py-3 text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+        className="w-full rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500 py-3.5 text-sm font-semibold text-white hover:shadow-lg hover:shadow-teal-500/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none transition-all duration-300"
       >
         {isLoading
           ? STEP_LABELS[step]

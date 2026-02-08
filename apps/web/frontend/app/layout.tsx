@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Takeaway",
-  description: "ENS subdomains that bridge to your chain",
+  title: "Takeaway — One Name. Any Chain. Zero Friction.",
+  description:
+    "Configure your ENS name once and receive crypto on any chain automatically. Powered by ENS and Li.Fi.",
 };
 
 export default function RootLayout({
@@ -25,7 +26,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
         <Providers>{children}</Providers>
       </body>
     </html>
