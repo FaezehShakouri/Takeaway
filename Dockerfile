@@ -25,8 +25,8 @@ COPY apps/relayer/ apps/relayer/
 # ---- Stage 2: Production image ----
 FROM node:20-slim AS runner
 
-# Install Bun (needed for the relayer)
-RUN apt-get update && apt-get install -y curl unzip && \
+# Install bash (for start script) and Bun (for relayer)
+RUN apt-get update && apt-get install -y bash curl unzip && \
     curl -fsSL https://bun.sh/install | bash && \
     ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
     ln -s /root/.bun/bin/bunx /usr/local/bin/bunx && \
@@ -57,4 +57,4 @@ ENV HOSTNAME=0.0.0.0
 
 EXPOSE 3000
 
-CMD ["/app/start.sh"]
+CMD ["/bin/bash", "/app/start.sh"]

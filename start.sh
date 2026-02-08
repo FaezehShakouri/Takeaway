@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 # Start the relayer in the background
@@ -8,7 +8,6 @@ bun run index.ts &
 RELAYER_PID=$!
 
 # Start the Next.js frontend (standalone build)
-# The server.js location depends on the standalone output structure
 echo "[start] Launching frontend on port ${PORT:-3000}..."
 if [ -f /app/apps/web/frontend/server.js ]; then
   cd /app/apps/web/frontend
@@ -25,11 +24,11 @@ FRONTEND_PID=$!
 echo "[start] Both services started (relayer=$RELAYER_PID, frontend=$FRONTEND_PID)"
 
 # Handle shutdown gracefully
-trap "kill $RELAYER_PID $FRONTEND_PID 2>/dev/null; exit 0" SIGTERM SIGINT
+cleanup() {
+  kill $RELAYER_PID $FRONTEND_PID 2>/dev/null
+  exit 0
+}
+trap cleanup SIGTERM SIGINT
 
-# Wait for either process to exit
-wait -n $RELAYER_PID $FRONTEND_PID 2>/dev/null || true
-
-# If one exits, kill the other and exit
-kill $RELAYER_PID $FRONTEND_PID 2>/dev/null
-wait
+# Wait for both processes — if either exits, shut down
+wait $RELAYER_PID $FRONTEND_PID
