@@ -4,9 +4,11 @@ import { useState, useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 
 /* ================================================================
-   Scroll-reveal hook + FadeIn wrapper
+   Scroll-reveal system — cinematic, multi-direction animations
    ================================================================ */
-function useFadeIn(threshold = 0.15) {
+type RevealDir = "up" | "down" | "left" | "right" | "scale" | "none";
+
+function useReveal(threshold = 0.12) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -19,7 +21,7 @@ function useFadeIn(threshold = 0.15) {
           obs.unobserve(el);
         }
       },
-      { threshold }
+      { threshold },
     );
     obs.observe(el);
     return () => obs.disconnect();
@@ -27,30 +29,47 @@ function useFadeIn(threshold = 0.15) {
   return { ref, visible };
 }
 
-function FadeIn({
+const hiddenTransform: Record<RevealDir, string> = {
+  up: "translateY(60px)",
+  down: "translateY(-60px)",
+  left: "translateX(-80px)",
+  right: "translateX(80px)",
+  scale: "scale(0.85)",
+  none: "none",
+};
+
+function Reveal({
   children,
+  direction = "up",
   delay = 0,
+  duration = 0.9,
   className = "",
 }: {
   children: ReactNode;
+  direction?: RevealDir;
   delay?: number;
+  duration?: number;
   className?: string;
 }) {
-  const { ref, visible } = useFadeIn();
+  const { ref, visible } = useReveal();
   return (
     <div
       ref={ref}
       className={className}
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0)" : "translateY(24px)",
-        transition: `all 0.7s cubic-bezier(0.16,1,0.3,1) ${delay}s`,
+        transform: visible ? "translate(0,0) scale(1)" : hiddenTransform[direction],
+        transition: `opacity ${duration}s cubic-bezier(0.16,1,0.3,1) ${delay}s, transform ${duration}s cubic-bezier(0.16,1,0.3,1) ${delay}s`,
+        willChange: "opacity, transform",
       }}
     >
       {children}
     </div>
   );
 }
+
+/* Shorthand alias */
+const FadeIn = Reveal;
 
 /* ================================================================
    Chain data
@@ -76,12 +95,12 @@ const steps = [
   {
     num: "01",
     title: "Configure your ENS",
-    desc: "Create chain-specific subdomains like arbitrum.yourname.eth. Pick your receiving address and preferred token. One-time setup — takes a minute.",
+    desc: "Create chain-specific subnames like arbitrum.yourname.eth. Pick your receiving address and preferred token. One-time setup — takes a minute.",
   },
   {
     num: "02",
     title: "Send to a name",
-    desc: "From any chain, send crypto to your subdomain. No bridge to visit, no routes to compare, no tokens to approve. Just send.",
+    desc: "From any chain, send crypto to your subname. No bridge to visit, no routes to compare, no tokens to approve. Just send.",
   },
   {
     num: "03",
@@ -157,7 +176,7 @@ export default function LandingPage() {
   useEffect(() => {
     const timer = setInterval(() => {
       setActiveIdx((i) => (i + 1) % destChains.length);
-    }, 10_000);
+    }, 2_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -165,10 +184,12 @@ export default function LandingPage() {
 
   return (
     <div
-      className="w-full overflow-x-hidden select-none"
+      className="w-full h-screen overflow-x-hidden overflow-y-auto select-none"
       style={{
         background:
           "linear-gradient(160deg, #fffbf5 0%, #fef7ed 25%, #f5fdf9 60%, #ecfdf5 100%)",
+        scrollSnapType: "y mandatory",
+        scrollBehavior: "smooth",
       }}
     >
       {/* ── Fixed nav ── */}
@@ -176,7 +197,7 @@ export default function LandingPage() {
         className="fixed top-0 left-0 right-0 z-50 px-6 sm:px-10 py-4 flex justify-between items-center bg-gradient-to-b from-[#fffbf5]/90 via-[#fffbf5]/60 to-transparent backdrop-blur-sm"
         style={{ animation: "fade-in-up 0.8s ease-out both" }}
       >
-        <span className="text-lg font-bold text-stone-700 tracking-tight">
+        <span className="text-xl sm:text-2xl font-bold text-stone-700 tracking-tight">
           Takeaway
         </span>
         <Link
@@ -190,7 +211,7 @@ export default function LandingPage() {
       {/* ================================================================
           HERO — full-screen visual story
           ================================================================ */}
-      <section className="h-screen relative overflow-hidden">
+      <section className="h-screen relative overflow-hidden" style={{ scrollSnapAlign: "start" }}>
         {/* Ambient blobs — slow drift */}
         <div
           className="absolute top-[15%] left-[10%] w-[500px] h-[500px] rounded-full bg-amber-100/30 blur-[120px] pointer-events-none"
@@ -210,17 +231,94 @@ export default function LandingPage() {
 
         {/* Floating particles */}
         {[
-          { left: "12%", top: "30%", size: 6, dur: 8, delay: 0, color: "#d97706" },
-          { left: "28%", top: "60%", size: 5, dur: 10, delay: 2, color: "#0d9488" },
-          { left: "55%", top: "25%", size: 5, dur: 9, delay: 4, color: "#78716c" },
-          { left: "72%", top: "55%", size: 6, dur: 11, delay: 1, color: "#0d9488" },
-          { left: "40%", top: "70%", size: 5, dur: 8, delay: 6, color: "#d97706" },
-          { left: "85%", top: "35%", size: 5, dur: 10, delay: 3, color: "#78716c" },
-          { left: "20%", top: "80%", size: 6, dur: 9, delay: 5, color: "#0d9488" },
-          { left: "65%", top: "75%", size: 5, dur: 12, delay: 7, color: "#d97706" },
-          { left: "48%", top: "40%", size: 4, dur: 10, delay: 1.5, color: "#0d9488" },
-          { left: "8%", top: "55%", size: 5, dur: 9, delay: 3.5, color: "#d97706" },
-          { left: "90%", top: "65%", size: 5, dur: 11, delay: 5.5, color: "#78716c" },
+          {
+            left: "12%",
+            top: "30%",
+            size: 6,
+            dur: 8,
+            delay: 0,
+            color: "#d97706",
+          },
+          {
+            left: "28%",
+            top: "60%",
+            size: 5,
+            dur: 10,
+            delay: 2,
+            color: "#0d9488",
+          },
+          {
+            left: "55%",
+            top: "25%",
+            size: 5,
+            dur: 9,
+            delay: 4,
+            color: "#78716c",
+          },
+          {
+            left: "72%",
+            top: "55%",
+            size: 6,
+            dur: 11,
+            delay: 1,
+            color: "#0d9488",
+          },
+          {
+            left: "40%",
+            top: "70%",
+            size: 5,
+            dur: 8,
+            delay: 6,
+            color: "#d97706",
+          },
+          {
+            left: "85%",
+            top: "35%",
+            size: 5,
+            dur: 10,
+            delay: 3,
+            color: "#78716c",
+          },
+          {
+            left: "20%",
+            top: "80%",
+            size: 6,
+            dur: 9,
+            delay: 5,
+            color: "#0d9488",
+          },
+          {
+            left: "65%",
+            top: "75%",
+            size: 5,
+            dur: 12,
+            delay: 7,
+            color: "#d97706",
+          },
+          {
+            left: "48%",
+            top: "40%",
+            size: 4,
+            dur: 10,
+            delay: 1.5,
+            color: "#0d9488",
+          },
+          {
+            left: "8%",
+            top: "55%",
+            size: 5,
+            dur: 9,
+            delay: 3.5,
+            color: "#d97706",
+          },
+          {
+            left: "90%",
+            top: "65%",
+            size: 5,
+            dur: 11,
+            delay: 5.5,
+            color: "#78716c",
+          },
         ].map((p, i) => (
           <div
             key={i}
@@ -310,11 +408,12 @@ export default function LandingPage() {
           className="absolute right-3 sm:right-8 lg:right-16 top-[46%] -translate-y-1/2 z-10"
           style={{ animation: "fade-in-up 0.8s ease-out 0.35s both" }}
         >
-          {/* ENS delivery address */}
+          {/* ENS delivery address — re-mounts on chain change for fresh animation */}
           <div
+            key={`ens-${activeIdx}`}
             className="flex items-center gap-1 sm:gap-1.5 bg-white/80 backdrop-blur-sm rounded-full px-2 py-1 sm:px-3 sm:py-1.5 border border-stone-200/50 shadow-sm mb-2 mx-auto w-fit"
             style={{
-              animation: "ens-float 10s ease-in-out 1s infinite both",
+              animation: "fade-in-up 0.2s ease-out both",
             }}
           >
             <svg
@@ -332,7 +431,7 @@ export default function LandingPage() {
               <circle cx="12" cy="10" r="3" />
             </svg>
             <span className="text-[9px] sm:text-[10px] font-mono text-stone-500 whitespace-nowrap">
-              {activeDest.slug}.zkfriendly.eth
+              {activeDest.slug}.your-name.eth
             </span>
           </div>
 
@@ -343,7 +442,7 @@ export default function LandingPage() {
               style={{
                 background:
                   "radial-gradient(circle, rgba(20,184,166,0.22) 0%, transparent 70%)",
-                animation: "dest-glow 10s ease-in-out 1s infinite both",
+                animation: "dest-glow 2s ease-in-out 1s infinite both",
               }}
             />
             <div className="relative rounded-2xl bg-white/65 backdrop-blur-sm border border-stone-200/40 p-2 sm:p-3 shadow-[0_2px_16px_rgba(0,0,0,0.04)] w-[120px] sm:w-40 lg:w-44">
@@ -385,7 +484,7 @@ export default function LandingPage() {
                           className="absolute inset-0 rounded-lg sm:rounded-xl border border-teal-200/60 pointer-events-none"
                           style={{
                             animation:
-                              "dest-ring 10s ease-out 1s infinite both",
+                              "dest-ring 2s ease-out 1s infinite both",
                           }}
                         />
                       )}
@@ -432,7 +531,7 @@ export default function LandingPage() {
               style={{
                 background:
                   "radial-gradient(circle, rgba(251,191,36,0.45) 0%, rgba(251,191,36,0.1) 50%, transparent 70%)",
-                animation: "package-glow 10s ease-in-out 1s infinite both",
+                animation: "package-glow 2s ease-in-out 1s infinite both",
                 filter: "blur(3px)",
               }}
             />
@@ -454,18 +553,21 @@ export default function LandingPage() {
           className="absolute bottom-8 sm:bottom-12 lg:bottom-14 left-0 right-0 text-center z-20 px-6"
           style={{ animation: "fade-in-up 1s ease-out 0.5s both" }}
         >
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-stone-800 tracking-tight mb-3">
-            Takeaway
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-800 tracking-tight mb-3">
+            Set up once. Receive forever.
           </h1>
           <p className="text-sm sm:text-base lg:text-lg text-stone-500 max-w-md mx-auto leading-relaxed mb-6">
-            Set up{" "}
+            Configure{" "}
             <span className="font-mono font-semibold text-teal-600">
               {"{chain}"}.yourname.eth
             </span>{" "}
-            once - receive funds from any chain to the right one, automatically.
+            — receive funds from any chain to the right one, automatically.
           </p>
           {/* Scroll hint */}
-          <div className="flex flex-col items-center gap-1 text-stone-300">
+          <a
+            href="#how-it-works"
+            className="inline-flex flex-col items-center gap-1 text-stone-300 hover:text-stone-400 transition-colors cursor-pointer"
+          >
             <span className="text-[11px] font-medium tracking-wide uppercase">
               Learn more
             </span>
@@ -482,40 +584,47 @@ export default function LandingPage() {
             >
               <polyline points="6 9 12 15 18 9" />
             </svg>
-          </div>
+          </a>
         </div>
       </section>
 
       {/* ================================================================
           HOW IT WORKS
           ================================================================ */}
-      <section className="py-20 sm:py-28 relative">
-        <div className="mx-auto max-w-5xl px-6">
-          <FadeIn className="text-center mb-14 sm:mb-16">
-            <p className="text-xs sm:text-sm font-semibold text-teal-600 tracking-wider uppercase mb-2">
+      <section
+        id="how-it-works"
+        className="min-h-screen flex items-center py-20 sm:py-28 relative"
+        style={{ scrollSnapAlign: "start" }}
+      >
+        <div className="mx-auto max-w-5xl px-6 w-full">
+          <Reveal direction="scale" duration={1} className="text-center mb-14 sm:mb-16">
+            <p className="text-xs sm:text-sm font-semibold text-teal-600 tracking-wider uppercase mb-3">
               How it works
             </p>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-stone-800 tracking-tight">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-800 tracking-tight">
               Three steps. That&apos;s it.
             </h2>
-          </FadeIn>
+          </Reveal>
 
           <div className="grid sm:grid-cols-3 gap-5 lg:gap-8">
-            {steps.map((step, i) => (
-              <FadeIn key={step.num} delay={i * 0.12}>
-                <div className="rounded-2xl bg-white/50 backdrop-blur-sm border border-stone-200/30 p-5 sm:p-6 shadow-[0_2px_16px_rgba(0,0,0,0.03)] h-full">
-                  <span className="text-4xl sm:text-5xl font-bold text-teal-500/[0.12] block mb-3 leading-none">
-                    {step.num}
-                  </span>
-                  <h3 className="text-base sm:text-lg font-semibold text-stone-700 mb-2">
-                    {step.title}
-                  </h3>
-                  <p className="text-sm text-stone-400 leading-relaxed">
-                    {step.desc}
-                  </p>
-                </div>
-              </FadeIn>
-            ))}
+            {steps.map((step, i) => {
+              const dirs: RevealDir[] = ["left", "up", "right"];
+              return (
+                <Reveal key={step.num} direction={dirs[i]} delay={0.15 + i * 0.2} duration={1}>
+                  <div className="rounded-2xl bg-white/50 backdrop-blur-sm border border-stone-200/30 p-5 sm:p-6 shadow-[0_2px_16px_rgba(0,0,0,0.03)] h-full">
+                    <span className="text-5xl sm:text-6xl font-bold text-teal-500/[0.12] block mb-3 leading-none">
+                      {step.num}
+                    </span>
+                    <h3 className="text-base sm:text-lg font-semibold text-stone-700 mb-2">
+                      {step.title}
+                    </h3>
+                    <p className="text-sm text-stone-400 leading-relaxed">
+                      {step.desc}
+                    </p>
+                  </div>
+                </Reveal>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -523,24 +632,30 @@ export default function LandingPage() {
       {/* ================================================================
           WHY TAKEAWAY — value props
           ================================================================ */}
-      <section className="py-20 sm:py-28 relative">
-        <div className="mx-auto max-w-5xl px-6">
-          <FadeIn className="text-center mb-14 sm:mb-16">
-            <p className="text-xs sm:text-sm font-semibold text-teal-600 tracking-wider uppercase mb-2">
+      <section
+        id="why-takeaway"
+        className="min-h-screen flex items-center py-20 sm:py-28 relative"
+        style={{ scrollSnapAlign: "start" }}
+      >
+        <div className="mx-auto max-w-5xl px-6 w-full">
+          <Reveal direction="up" duration={1} className="text-center mb-14 sm:mb-16">
+            <p className="text-xs sm:text-sm font-semibold text-teal-600 tracking-wider uppercase mb-3">
               Why Takeaway
             </p>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-stone-800 tracking-tight">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-800 tracking-tight">
               Set up once. Receive forever.
             </h2>
-          </FadeIn>
+          </Reveal>
 
           <div className="grid sm:grid-cols-3 gap-5 lg:gap-8">
             {values.map((v, i) => (
-              <FadeIn key={v.title} delay={i * 0.12}>
+              <Reveal key={v.title} direction="up" delay={0.2 + i * 0.2} duration={1}>
                 <div className="rounded-2xl bg-white/50 backdrop-blur-sm border border-stone-200/30 p-5 sm:p-6 shadow-[0_2px_16px_rgba(0,0,0,0.03)] h-full">
-                  <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100/60 flex items-center justify-center text-teal-500 mb-4">
-                    {v.icon}
-                  </div>
+                  <Reveal direction="scale" delay={0.4 + i * 0.2} duration={0.6}>
+                    <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100/60 flex items-center justify-center text-teal-500 mb-4">
+                      {v.icon}
+                    </div>
+                  </Reveal>
                   <h3 className="text-base sm:text-lg font-semibold text-stone-700 mb-2">
                     {v.title}
                   </h3>
@@ -548,7 +663,7 @@ export default function LandingPage() {
                     {v.desc}
                   </p>
                 </div>
-              </FadeIn>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -557,66 +672,84 @@ export default function LandingPage() {
       {/* ================================================================
           EXAMPLE — show the concept visually
           ================================================================ */}
-      <section className="py-16 sm:py-24 relative">
-        <div className="mx-auto max-w-3xl px-6">
-          <FadeIn>
-            <div className="rounded-2xl bg-white/50 backdrop-blur-sm border border-stone-200/30 p-6 sm:p-8 shadow-[0_2px_16px_rgba(0,0,0,0.03)]">
-              <p className="text-xs sm:text-sm font-semibold text-teal-600 tracking-wider uppercase mb-4">
-                Example
+      <section
+        id="example"
+        className="min-h-screen flex items-center py-16 sm:py-24 relative"
+        style={{ scrollSnapAlign: "start" }}
+      >
+        <div className="mx-auto max-w-3xl px-6 w-full">
+          <Reveal direction="scale" duration={1} className="mb-10 text-center">
+            <p className="text-xs sm:text-sm font-semibold text-teal-600 tracking-wider uppercase mb-3">
+              Example
+            </p>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-800 tracking-tight">
+              How it looks in practice
+            </h2>
+          </Reveal>
+
+          <div className="rounded-2xl bg-white/50 backdrop-blur-sm border border-stone-200/30 p-6 sm:p-8 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-5">
+            <Reveal direction="left" delay={0.2} duration={1}>
+              <p className="text-sm sm:text-base text-stone-500 leading-relaxed">
+                You own{" "}
+                <span className="font-mono font-semibold text-stone-700">
+                  your-name.eth
+                </span>
+                . You configure{" "}
+                <span className="font-mono font-semibold text-teal-600">
+                  arbitrum.your-name.eth
+                </span>{" "}
+                to point to your Arbitrum address.
               </p>
-              <div className="space-y-4 text-sm sm:text-base text-stone-500 leading-relaxed">
-                <p>
-                  You own{" "}
-                  <span className="font-mono font-semibold text-stone-700">
-                    zkfriendly.eth
-                  </span>
-                  . You configure{" "}
-                  <span className="font-mono font-semibold text-teal-600">
-                    arbitrum.zkfriendly.eth
-                  </span>{" "}
-                  to point to your Arbitrum address.
-                </p>
-                <p>
-                  Now, anyone — from{" "}
-                  <span className="font-medium text-stone-600">
-                    any chain
-                  </span>{" "}
-                  — sends ETH to{" "}
-                  <span className="font-mono text-stone-600">
-                    arbitrum.zkfriendly.eth
-                  </span>
-                  . Our relayer picks it up, bridges it via Li.Fi, and it
-                  arrives on Arbitrum.{" "}
-                  <span className="font-medium text-stone-700">
-                    Automatically.
-                  </span>
-                </p>
-                <p className="text-stone-400">
-                  No bridge UI. No chain switching. No second transaction. Just
-                  a name and a destination.
-                </p>
-              </div>
-            </div>
-          </FadeIn>
+            </Reveal>
+            <Reveal direction="right" delay={0.4} duration={1}>
+              <p className="text-sm sm:text-base text-stone-500 leading-relaxed">
+                Now, anyone — from{" "}
+                <span className="font-medium text-stone-600">any chain</span>{" "}
+                — sends ETH to{" "}
+                <span className="font-mono text-stone-600">
+                  arbitrum.your-name.eth
+                </span>
+                . Our relayer picks it up, bridges it via Li.Fi, and it
+                arrives on Arbitrum.{" "}
+                <span className="font-medium text-stone-700">
+                  Automatically.
+                </span>
+              </p>
+            </Reveal>
+            <Reveal direction="up" delay={0.6} duration={1}>
+              <p className="text-sm sm:text-base text-stone-400 leading-relaxed font-medium">
+                No bridge UI. No chain switching. No second transaction. Just
+                a name and a destination.
+              </p>
+            </Reveal>
+          </div>
         </div>
       </section>
 
       {/* ================================================================
           CTA
           ================================================================ */}
-      <section className="py-20 sm:py-28 relative">
-        <div className="mx-auto max-w-2xl px-6 text-center">
-          <FadeIn>
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-stone-800 tracking-tight mb-3">
+      <section
+        id="cta"
+        className="min-h-screen flex items-center py-20 sm:py-28 relative"
+        style={{ scrollSnapAlign: "start" }}
+      >
+        <div className="mx-auto max-w-2xl px-6 w-full text-center">
+          <Reveal direction="scale" duration={1.1}>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-stone-800 tracking-tight mb-3">
               Ready to set up your name?
             </h2>
+          </Reveal>
+          <Reveal direction="up" delay={0.25} duration={1}>
             <p className="text-sm sm:text-base text-stone-400 leading-relaxed mb-8 max-w-md mx-auto">
               It only takes a minute. Configure once, receive across chains
               forever.
             </p>
+          </Reveal>
+          <Reveal direction="up" delay={0.45} duration={0.8}>
             <Link
               href="/setup"
-              className="inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 hover:shadow-teal-500/30 transition-all duration-300"
+              className="inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-teal-500/20 hover:shadow-teal-500/30 hover:scale-105 transition-all duration-300"
               style={{
                 background: "linear-gradient(135deg, #14b8a6, #06b6d4)",
               }}
@@ -635,7 +768,7 @@ export default function LandingPage() {
                 <path d="M5 12h14m-7-7l7 7-7 7" />
               </svg>
             </Link>
-          </FadeIn>
+          </Reveal>
         </div>
       </section>
 
