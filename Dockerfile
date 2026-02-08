@@ -38,7 +38,13 @@ WORKDIR /app
 # --- Frontend (Next.js standalone) ---
 # The standalone output contains server.js + minimal node_modules
 COPY --from=builder /app/apps/web/frontend/.next/standalone/ ./
-# Static assets & public files must be copied separately
+
+# Static assets & public files are NOT included in standalone and must be
+# copied separately. They must live next to server.js. Because standalone
+# may place server.js at the root OR nested under apps/web/frontend/,
+# we copy to both locations so it works either way.
+COPY --from=builder /app/apps/web/frontend/.next/static .next/static
+COPY --from=builder /app/apps/web/frontend/public public
 COPY --from=builder /app/apps/web/frontend/.next/static apps/web/frontend/.next/static
 COPY --from=builder /app/apps/web/frontend/public apps/web/frontend/public
 
