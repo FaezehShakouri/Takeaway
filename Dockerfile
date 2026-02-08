@@ -11,14 +11,14 @@ WORKDIR /app
 
 # -- Frontend: install deps & build --
 COPY apps/web/frontend/package.json apps/web/frontend/bun.lockb apps/web/frontend/
-RUN cd apps/web/frontend && bun install --frozen-lockfile
+RUN cd apps/web/frontend && bun install
 
 COPY apps/web/frontend/ apps/web/frontend/
 RUN cd apps/web/frontend && bun run build
 
 # -- Relayer: install deps --
 COPY apps/relayer/package.json apps/relayer/bun.lockb apps/relayer/
-RUN cd apps/relayer && bun install --frozen-lockfile
+RUN cd apps/relayer && bun install
 
 COPY apps/relayer/ apps/relayer/
 
