@@ -236,6 +236,7 @@ export async function processDeposit(
       abi: takeawayDepositAbi,
       functionName: "withdrawTo",
       args: [relayerAddress],
+      chain: walletClient.chain,
     });
     if (!hash) {
       console.error("[deposit] withdrawTo failed");
