@@ -42,12 +42,54 @@ export default function SetupPage() {
       {/* ── Floating particles ── */}
       <div className="fixed inset-0 pointer-events-none" aria-hidden="true">
         {[
-          { left: "15%", top: "25%", size: 5, dur: 9, delay: 0, color: "#d97706" },
-          { left: "35%", top: "65%", size: 4, dur: 11, delay: 2, color: "#0d9488" },
-          { left: "60%", top: "20%", size: 4, dur: 8, delay: 4, color: "#78716c" },
-          { left: "80%", top: "50%", size: 5, dur: 10, delay: 1, color: "#0d9488" },
-          { left: "45%", top: "75%", size: 4, dur: 9, delay: 6, color: "#d97706" },
-          { left: "10%", top: "60%", size: 5, dur: 12, delay: 3, color: "#78716c" },
+          {
+            left: "15%",
+            top: "25%",
+            size: 5,
+            dur: 9,
+            delay: 0,
+            color: "#d97706",
+          },
+          {
+            left: "35%",
+            top: "65%",
+            size: 4,
+            dur: 11,
+            delay: 2,
+            color: "#0d9488",
+          },
+          {
+            left: "60%",
+            top: "20%",
+            size: 4,
+            dur: 8,
+            delay: 4,
+            color: "#78716c",
+          },
+          {
+            left: "80%",
+            top: "50%",
+            size: 5,
+            dur: 10,
+            delay: 1,
+            color: "#0d9488",
+          },
+          {
+            left: "45%",
+            top: "75%",
+            size: 4,
+            dur: 9,
+            delay: 6,
+            color: "#d97706",
+          },
+          {
+            left: "10%",
+            top: "60%",
+            size: 5,
+            dur: 12,
+            delay: 3,
+            color: "#78716c",
+          },
         ].map((p, i) => (
           <div
             key={i}
@@ -93,7 +135,8 @@ export default function SetupPage() {
             Configure Your Chains
           </h1>
           <p className="text-stone-400 text-sm sm:text-base whitespace-nowrap">
-            Set up ENS subnames to receive crypto from any chain to your desired chain automatically.
+            Set up ENS subnames to receive crypto from any chain to your desired
+            chain automatically.
           </p>
         </div>
 
