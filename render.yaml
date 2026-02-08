@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: takeaway
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    envVars:
+      # Relayer env vars — set these in the Render dashboard
+      - key: RPC_URL
+        sync: false
+      - key: REGISTRY_ADDRESS
+        sync: false
+      - key: FACTORY_ADDRESS
+        sync: false
+      - key: RELAYER_PRIVATE_KEY
+        sync: false
+      - key: CHAIN_ID
+        value: "8453"
+      - key: ENS_RPC_URL
+        sync: false
+      - key: PORT
+        value: "3000"

@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.gitmodules
+.env
+.env.*
+*.log
+contracts/
+*.tgz
+.DS_Store
+.idea
+.vscode
